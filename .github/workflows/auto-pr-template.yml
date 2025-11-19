@@ -1,0 +1,34 @@
+name: Apply PR Template
+
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  apply-template:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get template based on target branch
+        id: template
+        run: |
+          if [[ "${{ github.event.pull_request.base.ref }}" == "develop" ]]; then
+            echo "template=develop.md" >> $GITHUB_OUTPUT
+          else
+            echo "template=main.md" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Read template
+        id: content
+        run: |
+          FILE=".github/PULL_REQUEST_TEMPLATE/${{ steps.template.outputs.template }}"
+          CONTENT=$(cat "$FILE")
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Update PR body
+        uses: peter-evans/create-or-update-comment@v3
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: ${{ steps.content.outputs.content }}
+          edit-mode: replace
