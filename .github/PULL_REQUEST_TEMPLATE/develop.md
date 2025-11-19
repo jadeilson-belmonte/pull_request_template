@@ -1,2 +1,2 @@
 ### template develop
-- [] foo
+- [ ] foo
