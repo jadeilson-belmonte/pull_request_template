@@ -1,34 +1,42 @@
-name: Apply PR Template
+name: Set PR template by target branch
 
 on:
   pull_request:
     types: [opened]
 
+permissions:
+  pull-requests: write
+
 jobs:
-  apply-template:
+  set-template:
     runs-on: ubuntu-latest
     steps:
-      - name: Get template based on target branch
-        id: template
-        run: |
-          if [[ "${{ github.event.pull_request.base.ref }}" == "develop" ]]; then
-            echo "template=develop.md" >> $GITHUB_OUTPUT
-          else
-            echo "template=main.md" >> $GITHUB_OUTPUT
-          fi
+      - uses: actions/checkout@v4
 
-      - name: Read template
-        id: content
-        run: |
-          FILE=".github/PULL_REQUEST_TEMPLATE/${{ steps.template.outputs.template }}"
-          CONTENT=$(cat "$FILE")
-          echo "content<<EOF" >> $GITHUB_OUTPUT
-          echo "$CONTENT" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Update PR body
-        uses: peter-evans/create-or-update-comment@v3
+      - name: Pick and apply template based on base branch
+        uses: actions/github-script@v7
         with:
-          issue-number: ${{ github.event.pull_request.number }}
-          body: ${{ steps.content.outputs.content }}
-          edit-mode: replace
+          script: |
+            const fs = require('fs');
+            const baseBranch = context.payload.pull_request.base.ref;
+            const currentBody = context.payload.pull_request.body || '';
+
+            // só aplica se a PR ainda não tem descrição (evita sobrescrever o que a pessoa já escreveu)
+            if (currentBody.trim().length > 0) {
+              console.log('PR já tem descrição, não vou sobrescrever.');
+              return;
+            }
+
+            const templateMap = {
+              'main': '.github/PULL_REQUEST_TEMPLATE/main.md',
+            };
+
+            const templatePath = templateMap[baseBranch] || '.github/PULL_REQUEST_TEMPLATE/develop.md';
+            const body = fs.readFileSync(templatePath, 'utf8');
+
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              body: body,
+            });
